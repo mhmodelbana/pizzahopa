@@ -1,0 +1,4 @@
+[functions.hopa-public-api]
+# Public customer order placement/tracking is intentional; this handler validates the
+# project API key, applies IP rate limits, and keeps the service-role key server-side.
+verify_jwt = false

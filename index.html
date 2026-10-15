@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#211f20">
+  <title>Hopa Pizza | هوبا بيتزا</title>
+  <meta name="description" content="هوبا بيتزا — بيتزا وكريب وسندوتشات ومشويات في ميت فضالة. اطلب وجبتك أونلاين.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/styles.css">
+  <script src="https://unpkg.com/lucide@0.468.0" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
+  <style>
+    :root{--brand:#ed1c24;--ink:#211f20;--cream:#fff9f3;--safe-bottom:env(safe-area-inset-bottom,0px)}
+    *{box-sizing:border-box} html{scroll-behavior:smooth;scroll-padding-top:100px} body{margin:0;background:var(--cream);color:var(--ink);font-family:Cairo,sans-serif;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+    .glass{background:rgba(255,255,255,.83);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)} .hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{scrollbar-width:none;-ms-overflow-style:none}
+    .food-card{background:#fff;border:1px solid #f0ece8;border-radius:26px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease}.food-card:hover{transform:translateY(-5px);box-shadow:0 20px 45px rgba(33,31,32,.10);border-color:#f4cfce}
+    .btn-primary{background:var(--brand);color:#fff;transition:transform .2s,background .2s,box-shadow .2s}.btn-primary:hover{background:#d71920;box-shadow:0 9px 25px #ed1c2438}.btn-primary:active{transform:scale(.98)}
+    .fade-up{animation:fadeup .48s cubic-bezier(.2,.75,.2,1) both}@keyframes fadeup{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    .loader-ring{border:3px solid #ed1c2426;border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    .drawer{transition:transform .32s cubic-bezier(.2,.8,.2,1)} .modal-backdrop{background:rgba(20,18,18,.65);backdrop-filter:blur(5px)}
+    .safe-footer{padding-bottom:calc(1rem + var(--safe-bottom))} input,textarea,button{font-family:inherit} input:focus,textarea:focus,select:focus{outline:2px solid #ed1c2429;border-color:#ed1c24!important}
+    .toast{animation:toastIn .25s ease both}@keyframes toastIn{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+    .hero-image{box-shadow:0 35px 80px rgba(33,31,32,.22)} .skeleton{background:linear-gradient(90deg,#f3eee8 25%,#fff 45%,#f3eee8 65%);background-size:220% 100%;animation:shine 1.3s linear infinite}@keyframes shine{to{background-position-x:-220%}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body class="antialiased">
+  <div id="loader" class="fixed inset-0 z-[9999] bg-cream flex flex-col items-center justify-center gap-5">
+    <div class="relative w-24 h-24 flex items-center justify-center"><div class="loader-ring absolute inset-0"></div><div class="w-16 h-16 rounded-2xl bg-brand text-white flex items-center justify-center text-3xl font-black shadow-xl">H</div></div>
+    <div class="text-center"><div class="text-3xl font-black">هوبا <span class="text-brand">بيتزا</span></div><p class="text-sm text-stone-500 mt-2 font-bold">بنجهّزلك تجربة بطعم مختلف</p></div>
+  </div>
+  <div id="toast-root" class="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] w-[calc(100%-2rem)] max-w-md space-y-2 pointer-events-none"></div>
+  <div id="app" class="min-h-screen"></div>
+
+<script>
+(() => {
+  'use strict';
+  // المفتاح العام فقط: مسموح وجوده في المتصفح. لا تضع SUPABASE_SECRET_KEY هنا مطلقًا.
+  const SUPABASE_URL = 'https://cmbisckklhehdnltfdus.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_c57dRxJI11V8H1DOcI-8Zg_YNKhJKg-';
+  const TURNSTILE_SITE_KEY = '%VITE_TURNSTILE_SITE_KEY%';
+  const CONFIG = { name:'هوبا بيتزا', phone1:'01029367274', phone2:'01111201842', address:'ميت فضالة - الطريق العام بجوار اكسسوارات هوبا' };
+  // كل الأصناف تستخدم ملف الشعار الموجود داخل assets.
+  const PRODUCT_LOGO_URL = './assets/hopa-logo.svg';
+  const PRODUCT_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MDAgNDUwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjQ1MCIgcng9IjQ0IiBmaWxsPSIjZmZmOWYzIi8+PGNpcmNsZSBjeD0iMzAwIiBjeT0iMTc1IiByPSIxMDgiIGZpbGw9IiNlZDFjMjQiLz48dGV4dCB4PSIzMDAiIHk9IjIwNyIgZm9udC1mYW1pbHk9IkFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTEyIiBmb250LXdlaWdodD0iOTAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmZmZmIj5IPC90ZXh0Pjx0ZXh0IHg9IjMwMCIgeT0iMzUwIiBmb250LWZhbWlseT0iQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0NiIgZm9udC13ZWlnaHQ9IjkwMCIgbGV0dGVyLXNwYWNpbmc9IjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMyMTFmMjAiPkhPUEEgUElaWkE8L3RleHQ+PHRleHQgeD0iMzAwIiB5PSIzOTAiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE5IiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOGI4NjgyIj5USEUgT1JJR0lOQUwgVEFTVEU8L3RleHQ+PC9zdmc+';
+  const client = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : null;
+  async function publicApi(action, payload={}) {
+    const {data, error} = await client.functions.invoke('hopa-public-api', {body:{action, ...payload}});
+    if (error) {
+      let detail = '';
+      try { const response = error.context; if (response?.clone) { const body = await response.clone().json(); detail = body?.error || ''; } } catch (_) {}
+      if (error.context?.status === 429) throw new Error(detail || 'محاولات كثيرة خلال وقت قصير. حاول بعد قليل.');
+      throw new Error(detail || 'تعذر الاتصال بخدمة الطلبات. تأكد من نشر Edge Function وتطبيق migration الإنتاج.');
+    }
+    if (!data?.ok) throw new Error(data?.error || 'تعذر تنفيذ العملية. حاول مرة أخرى.');
+    return data.data;
+  }
+  const arabicDigits='٠١٢٣٤٥٦٧٨٩', persianDigits='۰۱۲۳۴۵۶۷۸۹';
+  function normalizePhone(value){return [...String(value||'')].map(ch=>{let i=arabicDigits.indexOf(ch);if(i>=0)return String(i);i=persianDigits.indexOf(ch);return i>=0?String(i):ch;}).join('').replace(/[^0-9]/g,'');}
+  function randomHex(bytes=32){const data=new Uint8Array(bytes);crypto.getRandomValues(data);return [...data].map(x=>x.toString(16).padStart(2,'0')).join('');}
+  async function sha256Hex(value){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+  let turnstileLoadPromise=null;
+  function turnstileIsConfigured(){return Boolean(TURNSTILE_SITE_KEY && !TURNSTILE_SITE_KEY.startsWith('%') && !TURNSTILE_SITE_KEY.includes('REPLACE_'));}
+  function setupTurnstile(){
+    const container=$('#turnstile-widget');
+    if(!container||!turnstileIsConfigured())return;
+    const renderWidget=()=>{
+      const current=$('#turnstile-widget');if(!current||!window.turnstile)return;
+      if(state.turnstileWidgetId!==null){try{window.turnstile.remove(state.turnstileWidgetId)}catch(_){}state.turnstileWidgetId=null}
+      state.captchaToken='';
+      state.turnstileWidgetId=window.turnstile.render(current,{sitekey:TURNSTILE_SITE_KEY,theme:'light',callback(token){state.captchaToken=token},'expired-callback'(){state.captchaToken=''},'error-callback'(){state.captchaToken='';const note=$('#turnstile-error');if(note)note.textContent='تعذر التحقق البشري. حدّث مربع التحقق وحاول مجددًا.'}});
+    };
+    if(window.turnstile){renderWidget();return}
+    if(!turnstileLoadPromise){turnstileLoadPromise=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.defer=true;script.onload=resolve;script.onerror=()=>reject(new Error('Turnstile load failed'));document.head.appendChild(script)})}
+    turnstileLoadPromise.then(renderWidget).catch(()=>{const note=$('#turnstile-error');if(note)note.textContent='تعذر تحميل التحقق البشري. تأكد من اتصال الإنترنت.'});
+  }
+  function persistCart(){try{localStorage.setItem('hopa_cart_v1',JSON.stringify(state.cart.map(i=>({id:i.id,productId:i.productId,size:i.size,qty:i.qty,addonIds:i.addonIds}))))}catch(_){}}
+  function restoreCart(){
+    try {
+      const saved=JSON.parse(localStorage.getItem('hopa_cart_v1')||'[]');
+      if(!Array.isArray(saved))return;
+      state.cart=saved.slice(0,30).map(row=>{
+        const p=productById(row.productId); if(!p||!p.is_active)return null;
+        const size=String(row.size||''); const found=productSizes(p).find(x=>x.name===size);
+        if(productSizes(p).length&&!found)return null;
+        const addonIds=Array.isArray(row.addonIds)?[...new Set(row.addonIds.map(String))].filter(id=>addonGroupFor(p).some(a=>a.id===id)):[];
+        const addons=addonGroupFor(p).filter(a=>addonIds.includes(a.id)).map(a=>({id:a.id,name:a.name,price:priceForAddon(a,size)}));
+        const unitPrice=Number(found?.price||0)+addons.reduce((sum,a)=>sum+a.price,0); const qty=Math.max(1,Math.min(50,Math.trunc(Number(row.qty)||1)));
+        return {id:String(row.id||randomHex(8)),productId:p.id,name:p.name,img:PRODUCT_LOGO_URL,size,qty,addonIds,addons,unitPrice,itemTotal:unitPrice*qty};
+      }).filter(Boolean);
+      persistCart();
+    } catch (_) { state.cart=[]; }
+  }
+  function getSavedOrders(){try{const a=JSON.parse(localStorage.getItem('hopa_saved_orders_v1')||'[]');return Array.isArray(a)?a.filter(x=>/^HOPA-[0-9]{1,18}$/.test(x.order_number||'')&&/^[0-9a-f]{64}$/.test(x.tracking_token||'')).slice(0,10):[]}catch(_){return[]}}
+  function saveTrackedOrder(order){if(!order?.order_number||!order?.tracking_token)return;const saved=[{order_number:order.order_number,tracking_token:order.tracking_token,created_at:order.created_at||new Date().toISOString()},...getSavedOrders().filter(x=>x.order_number!==order.order_number)].slice(0,10);try{localStorage.setItem('hopa_saved_orders_v1',JSON.stringify(saved))}catch(_){}}
+  function trackingLink(order){const url=new URL(location.href);url.hash='track='+encodeURIComponent(order.order_number)+'&token='+encodeURIComponent(order.tracking_token);return url.toString()}
+  const state = {categories:[],products:[],addons:[],settings:{delivery_fee:15,minimum_order:0,estimated_delivery_minutes:45,delivery_areas:'يتم تأكيد نطاق التوصيل مع المطعم',is_open:true},category:'cat_pizza',search:'',cart:[],modal:null,cartOpen:false,checkout:false,loading:false,orderSuccess:null,trackOrderOpen:false,editingOrderDetails:false,captchaToken:'',turnstileWidgetId:null};
+  const $ = (s,root=document) => root.querySelector(s);
+  const money = n => `${Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2})} ج.م`;
+  const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const icon = (name, cls='w-5 h-5') => `<i data-lucide="${escapeHTML(name)}" class="${cls}"></i>`;
+  function icons(){ if(window.lucide) window.lucide.createIcons(); }
+  function toast(message,type='ok'){
+    const root=$('#toast-root'); if(!root)return;
+    const item=document.createElement('div');item.className='toast pointer-events-auto flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-xl '+(type==='error'?'border-red-100':'border-stone-100');
+    const badge=document.createElement('div');badge.className='w-9 h-9 rounded-xl flex items-center justify-center '+(type==='error'?'bg-red-50 text-brand':'bg-emerald-50 text-emerald-600');badge.innerHTML=icon(type==='error'?'alert-circle':'check-circle','w-5 h-5');
+    const text=document.createElement('p');text.className='font-bold text-sm flex-1';text.textContent=message;item.append(badge,text);root.append(item);icons();setTimeout(()=>{item.style.opacity='0';item.style.transform='translateY(-6px)';setTimeout(()=>item.remove(),250)},3600);
+  }
+  function productSizes(p){return Array.isArray(p.sizes)?p.sizes:[]}
+  function productById(id){return state.products.find(p=>p.id===id)}
+  function addonGroupFor(p){return state.addons.filter(a=>a.group_key===p.addon_group&&a.is_active)}
+  function priceForAddon(a,size){return a.price_type==='fixed'?Number(a.fixed_price||0):Number((a.size_prices||{})[size]||0)}
+  function currentUnitPrice(){if(!state.modal)return 0;const {product,size,addonIds}=state.modal;const base=productSizes(product).find(s=>s.name===size);return Number(base?.price||0)+addonGroupFor(product).filter(a=>addonIds.includes(a.id)).reduce((sum,a)=>sum+priceForAddon(a,size),0)}
+  function currentCount(){return state.cart.reduce((s,i)=>s+i.qty,0)}
+  function subtotal(){return state.cart.reduce((s,i)=>s+i.itemTotal,0)}
+  function total(){return subtotal()+(state.cart.length?Number(state.settings.delivery_fee||0):0)}
+  function categoryIcon(cat){return cat.icon||'utensils'}
+  function imageFallback(){return PRODUCT_LOGO_FALLBACK}
+  async function loadCatalog(){
+    if(!client)throw new Error('تعذر تحميل مكتبة الاتصال بـ Supabase. حدّث الصفحة وتأكد من اتصال الإنترنت.');
+    const [catsRes,productsRes,addonsRes,settingsRes]=await Promise.all([
+      client.from('categories').select('*').eq('is_active',true).order('sort_order'),
+      client.from('products').select('*').eq('is_active',true).order('sort_order'),
+      client.from('addons').select('*').eq('is_active',true).order('sort_order'),
+      client.from('store_settings').select('*').eq('id',1).maybeSingle()
+    ]);
+    const errors=[catsRes,productsRes,addonsRes,settingsRes].filter(r=>r.error);
+    if(errors.length) throw errors[0].error;
+    state.categories=catsRes.data||[];state.products=productsRes.data||[];state.addons=addonsRes.data||[];state.settings=settingsRes.data||state.settings;
+    if(!state.categories.some(c=>c.id===state.category))state.category=state.categories[0]?.id||'';
+  }
+  function render(){
+    const app=$('#app');app.innerHTML=renderPage();
+    if(state.modal)app.insertAdjacentHTML('beforeend',renderProductModal());
+    if(state.cartOpen)app.insertAdjacentHTML('beforeend',renderCartDrawer());
+    if(state.orderSuccess)app.insertAdjacentHTML('beforeend',renderOrderSuccess());
+    if(state.trackOrderOpen)app.insertAdjacentHTML('beforeend',renderTrackOrder());
+    icons();
+    if(state.cartOpen&&state.checkout)setupTurnstile();
+  }
+  function renderEditOrderItem(item,i){
+    const product=productById(item.product_id);
+    const sizes=product?productSizes(product):[];
+    const selected=(Array.isArray(item.addons)?item.addons:[]).map(a=>typeof a==='string'?a:a?.id).filter(Boolean);
+    const addons=product?addonGroupFor(product):[];
+    const sizePicker=product&&sizes.length?`<label class="block text-[10px] font-bold text-stone-500 mt-2">الحجم<select name="size_${i}" class="block w-full mt-1 rounded-lg border border-stone-200 p-2 text-xs font-bold">${sizes.map(z=>`<option value="${escapeHTML(z.name)}" ${z.name===(item.size||'')?'selected':''}>${escapeHTML(z.name)} — ${money(z.price)}</option>`).join('')}</select></label>`:`<span class="text-[10px] text-stone-400">${escapeHTML(item.size||'حجم غير متاح')}</span>`;
+    const addonPicker=product?`<details class="mt-2"><summary class="cursor-pointer text-[10px] font-black text-brand">تعديل الإضافات (${addons.length})</summary><div class="grid sm:grid-cols-2 gap-2 mt-2">${addons.length?addons.map(a=>`<label class="flex items-center gap-2 rounded-lg bg-stone-50 p-2 text-[10px] font-bold"><input type="checkbox" name="addon_${i}" value="${escapeHTML(a.id)}" ${selected.includes(a.id)?'checked':''} class="accent-red-600"><span class="flex-1">${escapeHTML(a.name)}</span><span>${money(priceForAddon(a,item.size||''))}</span></label>`).join(''):'<span class="text-[10px] text-stone-400">لا توجد إضافات متاحة.</span>'}</div></details>`:`<p class="text-[10px] text-amber-700 mt-2">الصنف لم يعد نشطًا في المنيو؛ لا يمكن إعادة تسعيره بأمان من هنا.</p>`;
+    return `<div class="flex gap-3 items-start justify-between border-b border-stone-100 pb-3 last:border-0 last:pb-0"><div class="min-w-0 flex-1"><b class="block text-xs">${escapeHTML(item.product_name||item.name||'صنف')}</b>${sizePicker}${addonPicker}</div><label class="text-[10px] font-bold text-stone-500 shrink-0">الكمية<input aria-label="كمية ${escapeHTML(item.product_name||item.name||'الصنف')}" type="number" name="qty_${i}" min="0" max="50" step="1" value="${Number(item.quantity||1)}" class="block w-20 mt-1 rounded-lg border border-stone-200 p-2 text-center font-black text-sm"></label></div>`;
+  }
+  function renderOrderSuccess(){
+    const o=state.orderSuccess||{};
+    const current=o.status||'استلمنا طلبك';
+    const steps=['استلمنا طلبك','بيتحضر','خرج للتوصيل','تم التوصيل'];
+    const active=steps.indexOf(current);
+    const cancelled=current==='ملغي';
+    const canChange=current==='استلمنا طلبك';
+    const items=Array.isArray(o.items)?o.items:[];
+    const editing=Boolean(state.editingOrderDetails);
+    const detailRow=(label,value)=>`<div class="min-w-0"><span class="block text-[10px] font-black text-stone-400 mb-1">${label}</span><div class="font-bold text-sm break-words">${escapeHTML(value||'—')}</div></div>`;
+    return `<div class="fixed inset-0 z-[10001] modal-backdrop flex items-center justify-center p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="تفاصيل وتتبع الطلب">
+      <section class="bg-white rounded-[28px] w-full max-w-2xl max-h-[94dvh] overflow-y-auto shadow-2xl">
+        <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-stone-100 p-5 sm:p-7 flex items-start gap-3">
+          <div class="w-12 h-12 rounded-2xl ${cancelled?'bg-red-50 text-red-600':'bg-emerald-50 text-emerald-600'} flex items-center justify-center shrink-0">${icon(cancelled?'x-circle':'package-check','w-7 h-7')}</div>
+          <div class="flex-1 min-w-0"><p class="text-xs font-black ${cancelled?'text-red-600':'text-emerald-700'} mb-1">${cancelled?'تم إلغاء الطلب':'طلبك مع هوبا بيتزا'}</p><h2 class="text-xl sm:text-2xl font-black">${cancelled?'الطلب ملغي':escapeHTML(current)}</h2><p class="text-xs text-stone-500 mt-1">رقم الطلب <b class="text-brand" dir="ltr">${escapeHTML(o.order_number||'—')}</b></p><p class="text-[10px] text-stone-400 mt-1">تاريخ الطلب: ${escapeHTML(o.created_at?new Date(o.created_at).toLocaleString('ar-EG'):'—')}</p>${o.tracking_token?`<button type="button" onclick="Hopa.copyTrackingLink()" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-50 text-brand px-3 py-2 text-xs font-black">${icon('link','w-4 h-4')} نسخ رابط التتبع الآمن</button><p class="text-[10px] text-amber-700 mt-2">الرابط سري؛ احتفظ به ولا تشاركه إلا مع الشخص المعني بالطلب.</p>`:''}</div>
+          <button type="button" onclick="Hopa.closeOrderSuccess()" class="w-10 h-10 rounded-xl bg-stone-100 hover:bg-stone-200 flex items-center justify-center shrink-0" aria-label="إغلاق">${icon('x','w-5 h-5')}</button>
+        </div>
+        <div class="p-5 sm:p-7 space-y-6">
+          ${cancelled?`<div class="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm font-bold text-red-700">تم إلغاء الطلب. لو محتاج تطلب تاني، ارجع للمنيو وابدأ طلبًا جديدًا.</div>`:`<div class="rounded-2xl border border-stone-100 p-4 sm:p-5"><div class="flex items-center justify-between gap-2 mb-5"><h3 class="font-black">مراحل الطلب</h3><button type="button" onclick="Hopa.refreshOrderStatus()" class="text-xs text-brand font-black flex items-center gap-1">${icon('refresh-cw','w-4 h-4')} تحديث الحالة</button></div><div class="grid grid-cols-4 gap-2">${steps.map((step,i)=>`<div class="text-center"><div class="mx-auto w-9 h-9 rounded-full flex items-center justify-center ${i<=active?'bg-emerald-100 text-emerald-700':'bg-stone-100 text-stone-400'}">${i<active?icon('check','w-4 h-4'):i+1}</div><p class="mt-2 text-[10px] sm:text-xs font-black leading-5 ${i<=active?'text-ink':'text-stone-400'}">${step}</p></div>`).join('')}</div><p class="text-[10px] text-stone-400 mt-4">آخر تحديث: ${escapeHTML(o.updated_at?new Date(o.updated_at).toLocaleString('ar-EG'):'—')}</p><p id="order-status-error" class="text-xs text-red-600 mt-2 hidden"></p></div>`}
+          <section class="rounded-2xl border border-stone-100 p-4 sm:p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="font-black">بيانات العميل والتوصيل</h3>${canChange&&!editing?`<button type="button" onclick="Hopa.toggleEditOrderDetails()" class="text-xs text-brand font-black">${icon('pencil','w-4 h-4 inline-block')} تعديل الطلب</button>`:''}</div>
+            ${editing?`<form id="edit-order-details-form" onsubmit="Hopa.saveOrderDetails(event)" class="space-y-3"><label class="block"><span class="block text-xs font-bold text-stone-500 mb-1">اسم العميل</span><input class="w-full rounded-xl border border-stone-200 p-3 font-bold" name="customer_name" minlength="2" maxlength="100" required value="${escapeHTML(o.customer_name||'')}"></label><label class="block"><span class="block text-xs font-bold text-stone-500 mb-1">رقم الهاتف</span><input class="w-full rounded-xl border border-stone-200 p-3 font-bold text-left" dir="ltr" type="tel" inputmode="tel" name="new_phone" maxlength="25" required value="${escapeHTML(o.phone||'')}"></label><label class="block"><span class="block text-xs font-bold text-stone-500 mb-1">عنوان التوصيل</span><textarea class="w-full rounded-xl border border-stone-200 p-3 font-bold" name="address" minlength="5" maxlength="500" rows="2" required>${escapeHTML(o.address||'')}</textarea></label><label class="block"><span class="block text-xs font-bold text-stone-500 mb-1">ملاحظات الطلب</span><textarea class="w-full rounded-xl border border-stone-200 p-3 font-bold" name="notes" maxlength="500" rows="2">${escapeHTML(o.notes||'')}</textarea></label>${items.length?`<div class="border border-stone-100 rounded-2xl p-3"><h4 class="font-black text-sm mb-1">تعديل الأصناف والكميات</h4><p class="text-[11px] text-stone-400 mb-3">غيّر الكمية، واكتب صفرًا لحذف الصنف. سيتم إعادة حساب الأسعار من قاعدة البيانات.</p><div class="space-y-3">${items.map((item,i)=>renderEditOrderItem(item,i)).join('')}}</div></div>`:''}<p class="text-xs text-amber-700 bg-amber-50 rounded-xl p-3">التعديل والإلغاء متاحان قبل بدء التجهيز فقط. تغيير رقم الهاتف لا يغيّر رمز التتبع السري.</p><div class="flex gap-2"><button type="submit" class="btn-primary rounded-xl px-5 py-3 font-black text-sm">حفظ التعديلات</button><button type="button" onclick="Hopa.toggleEditOrderDetails(false)" class="rounded-xl bg-stone-100 px-5 py-3 font-black text-sm">إلغاء</button></div><p id="edit-order-error" class="hidden text-xs text-red-600 font-bold"></p></form>`:`<div class="grid sm:grid-cols-2 gap-4">${detailRow('اسم العميل',o.customer_name)}${detailRow('رقم الهاتف',o.phone)}<div class="sm:col-span-2">${detailRow('عنوان التوصيل',o.address)}</div><div class="sm:col-span-2">${detailRow('ملاحظات',o.notes||'لا توجد ملاحظات')}</div></div>`}
+          </section>
+          <section class="rounded-2xl border border-stone-100 p-4 sm:p-5"><h3 class="font-black mb-4">تفاصيل الأصناف</h3>${items.length?`<div class="space-y-3">${items.map(item=>`<div class="flex gap-3 justify-between border-b border-stone-100 pb-3 last:border-0 last:pb-0"><div class="min-w-0 flex-1"><b class="block text-sm">${escapeHTML(item.product_name||item.name||'صنف')}</b><p class="text-xs text-stone-500 mt-1">${escapeHTML(item.size||'')} · الكمية: ${escapeHTML(item.quantity||item.qty||1)}</p>${Array.isArray(item.addons)&&item.addons.length?`<p class="text-[11px] text-stone-400 mt-1">إضافات: ${item.addons.map(a=>escapeHTML(a.name)).join('، ')}</p>`:''}</div><b class="text-sm whitespace-nowrap">${money(item.line_total??item.itemTotal??0)}</b></div>`).join('')}</div>`:`<p class="text-sm text-stone-400">تفاصيل الأصناف غير متاحة للطلب ده. استخدم تحديث الحالة أو راجع الإدارة.</p>`}</section>
+          <section class="rounded-2xl bg-stone-50 p-4 sm:p-5 space-y-3"><div class="flex justify-between gap-3 text-sm"><span class="text-stone-500 font-bold">قيمة الأصناف</span><b>${money(o.subtotal||0)}</b></div><div class="flex justify-between gap-3 text-sm"><span class="text-stone-500 font-bold">رسوم التوصيل</span><b>${money(o.delivery_fee||0)}</b></div><div class="border-t border-stone-200 pt-3 flex justify-between gap-3"><b class="text-lg">الإجمالي</b><b class="text-2xl text-brand">${money(o.total||0)}</b></div></section>
+          <div class="flex flex-col sm:flex-row gap-3">${canChange&&!editing?`<button type="button" onclick="Hopa.cancelTrackedOrder()" class="rounded-2xl border border-red-200 text-red-600 py-3 px-4 font-black text-sm">إلغاء الطلب</button>`:''}${current==='تم التوصيل'?`<button type="button" onclick="Hopa.reorderPreviousOrder()" class="rounded-2xl bg-emerald-50 text-emerald-800 py-3 px-4 font-black text-sm">اطلب نفس الطلب مرة تانية</button>`:''}<button type="button" onclick="Hopa.closeOrderSuccess()" class="flex-1 rounded-2xl bg-ink text-white py-3 font-black text-sm">العودة للموقع</button></div>
+        </div>
+      </section></div>`;
+  }
+  function renderTrackOrder(){
+    const savedOrders=getSavedOrders().slice(0,5);
+    return `<div class="fixed inset-0 z-[10002] modal-backdrop flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="تتبع الطلب">
+      <button type="button" aria-label="إغلاق نافذة تتبع الطلب" class="absolute inset-0 w-full h-full" onclick="Hopa.closeTrackOrder()"></button>
+      <section class="relative bg-white rounded-[28px] w-full max-w-md p-6 sm:p-8 shadow-2xl">
+        <button type="button" onclick="Hopa.closeTrackOrder()" class="absolute left-4 top-4 w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center" aria-label="إغلاق">${icon('x','w-5 h-5')}</button>
+        <div class="w-14 h-14 rounded-2xl bg-red-50 text-brand flex items-center justify-center mb-4">${icon('package-search','w-7 h-7')}</div>
+        <h2 class="text-2xl font-black mb-2">تتبع طلبك</h2>
+        <p class="text-sm text-stone-500 font-semibold leading-6 mb-6">اكتب رقم الطلب ورمز التتبع السري اللي ظهر بعد التأكيد أو افتح رابط التتبع اللي حفظته.</p>
+        <form id="track-order-form" onsubmit="Hopa.trackOrder(event)" class="space-y-4">
+          <label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">رقم الطلب</span><input required minlength="5" maxlength="50" name="order_number" dir="ltr" autocomplete="off" class="w-full mt-1 font-bold text-left outline-none" placeholder="مثال: HOPA-1001"></label>
+          <label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">رمز التتبع السري (64 حرفًا)</span><input required minlength="64" maxlength="64" pattern="[a-fA-F0-9]{64}" name="tracking_token" dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" class="w-full mt-1 font-bold text-left outline-none" placeholder="رمز التتبع الموجود في رابط التأكيد"></label>
+          <p id="track-order-error" class="hidden text-sm text-red-600 font-bold" role="alert"></p>
+          <button id="track-order-submit" type="submit" class="btn-primary w-full rounded-2xl py-4 font-black flex items-center justify-center gap-2">${icon('search-check','w-5 h-5')} عرض حالة الطلب</button>
+        </form>
+        ${savedOrders.length?`<div class="border-t border-stone-100 mt-5 pt-4"><p class="text-xs font-black mb-2">طلبات محفوظة على الجهاز</p><div class="flex flex-wrap gap-2">${savedOrders.map(o=>`<button type="button" class="rounded-lg bg-stone-100 px-3 py-2 text-xs font-black" onclick="Hopa.trackSavedOrder('${o.order_number}','${o.tracking_token}')">${o.order_number}</button>`).join('')}</div></div>`:''}
+      </section></div>`;
+  }
+
+  function renderHeader(){return `
+    <header class="fixed top-0 inset-x-0 z-40 px-3 sm:px-6 pt-3">
+      <div class="max-w-7xl mx-auto glass rounded-[24px] border border-white/80 shadow-[0_8px_35px_rgba(33,31,32,.07)] px-4 sm:px-6 h-[72px] flex items-center justify-between gap-4">
+        <a href="#top" class="flex items-center gap-3 shrink-0 no-underline"><span class="w-11 h-11 rounded-2xl bg-brand text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-red-200">H</span><span class="leading-tight"><b class="block text-lg sm:text-xl font-black">هوبا <span class="text-brand">بيتزا</span></b><small class="text-[10px] text-stone-400 font-extrabold tracking-wide">الأصل في المذاق</small></span></a>
+        <nav class="hidden md:flex items-center gap-1 text-sm font-extrabold"><a class="px-4 py-2 rounded-full hover:bg-stone-100" href="#top">الرئيسية</a><a class="px-4 py-2 rounded-full hover:bg-stone-100" href="#menu">المنيو</a></nav>
+        <div class="flex items-center gap-2"><button type="button" onclick="Hopa.openTrackOrder()" class="h-11 w-11 sm:w-auto sm:px-3 rounded-xl border border-stone-200 bg-white text-ink hover:border-brand hover:text-brand flex items-center justify-center gap-2 text-xs font-extrabold" aria-label="تتبع الطلب" title="تتبع الطلب">${icon('package-search','w-5 h-5')}<span class="hidden sm:inline">تتبع الطلب</span></button><button onclick="Hopa.toggleCart()" class="relative bg-ink text-white hover:bg-black rounded-2xl h-11 px-3 sm:px-4 flex items-center gap-2 font-extrabold text-sm">${icon('shopping-bag','w-4 h-4')}<span class="hidden sm:inline">السلة</span><span class="absolute -top-2 -left-2 min-w-5 h-5 px-1 rounded-full bg-brand text-white text-[10px] font-black flex items-center justify-center ${currentCount()?'':'hidden'}">${currentCount()}</span></button></div>
+      </div>
+    </header>`}
+  function renderPage(){
+    const filtered=state.products.filter(p=>{const matchCat=state.search||p.category_id===state.category;const q=state.search.trim().toLowerCase();return matchCat&&(!q||`${p.name} ${p.description}`.toLowerCase().includes(q))});
+    return `${renderHeader()}<main id="top" class="pt-28 sm:pt-32">
+      <section class="relative px-4 sm:px-6 pb-16 sm:pb-24 overflow-hidden"><div class="absolute -top-6 -right-24 w-80 h-80 rounded-full bg-red-100/70 blur-3xl pointer-events-none"></div><div class="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-orange-100/70 blur-3xl pointer-events-none"></div>
+        <div class="max-w-7xl mx-auto grid md:grid-cols-2 items-center gap-12 relative z-10"><div class="order-2 md:order-1 text-center md:text-right fade-up"><span class="inline-flex items-center gap-2 bg-white border border-red-100 text-brand rounded-full px-4 py-2 text-xs font-black shadow-sm mb-6">${icon('flame','w-4 h-4')} المذاق الأصلي في الدقهلية</span><h1 class="text-[2.7rem] sm:text-6xl lg:text-7xl font-black leading-[1.2] tracking-tight mb-6">طعم ياخدك<br><span class="text-brand">لعالم تاني!</span></h1><p class="max-w-xl mx-auto md:mx-0 text-stone-500 font-semibold leading-8 sm:text-lg mb-8">بيتزا سخنة، كريب مليان حشوة، ووجبات معمولة بحب. اختار اللي نفسك فيه وإحنا نوصل لحد عندك.</p><div class="flex flex-col sm:flex-row justify-center md:justify-start gap-3"><a href="#menu" class="btn-primary inline-flex items-center justify-center gap-3 rounded-2xl px-7 py-4 font-black shadow-lg shadow-red-200">اطلب دلوقتي ${icon('arrow-left','w-5 h-5')}</a><a href="tel:${CONFIG.phone1}" class="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-4 bg-white border border-stone-200 font-black hover:border-stone-300">${icon('phone','w-4 h-4')} اتصل بينا</a></div></div>
+        <div class="order-1 md:order-2 relative max-w-xl mx-auto w-full fade-up"><div class="absolute inset-7 bg-brand/10 rounded-[3rem] rotate-6"></div><div class="relative rounded-[2.5rem] border-[7px] border-white overflow-hidden aspect-[4/3] md:aspect-square hero-image rotate-[-2deg] hover:rotate-0 transition-transform duration-500"><img class="w-full h-full object-cover" src="${PRODUCT_LOGO_URL}" onerror="this.onerror=null;this.src='${PRODUCT_LOGO_FALLBACK}'" alt="شعار هوبا بيتزا" fetchpriority="high"></div><div class="absolute -bottom-4 right-0 sm:-right-4 bg-white rounded-2xl p-4 shadow-xl flex items-center gap-3"><span class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">${icon('bike','w-6 h-6')}</span><div><b class="block text-sm font-black">طازة لحد بابك</b><span class="text-[11px] text-stone-400 font-bold">كل طلب بيتعمل مخصوص</span></div></div><div class="absolute top-5 -left-2 sm:-left-5 bg-white/95 rounded-2xl px-4 py-3 shadow-xl"><b class="text-brand text-lg">HOPA</b><span class="block text-[9px] text-stone-400 font-extrabold">MADE WITH LOVE</span></div></div>
+        </div></section>
+      <section id="menu" class="bg-white rounded-t-[2.5rem] sm:rounded-t-[4rem] pt-14 sm:pt-20 pb-24 shadow-[0_-20px_60px_rgba(33,31,32,.035)]"><div class="max-w-7xl mx-auto px-4 sm:px-6"><div class="mb-6 rounded-2xl border ${state.settings.is_open?'border-emerald-100 bg-emerald-50/70':'border-red-100 bg-red-50/70'} p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div class="flex gap-3 items-start"><span class="w-10 h-10 rounded-xl ${state.settings.is_open?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'} flex items-center justify-center shrink-0">${icon(state.settings.is_open?'store':'store-off','w-5 h-5')}</span><div><b class="block font-black">${state.settings.is_open?'المطعم يستقبل الطلبات الآن':'المطعم مغلق حاليًا'}</b><p class="text-xs text-stone-600 mt-1">${escapeHTML(state.settings.delivery_areas||'يتم تأكيد نطاق التوصيل مع المطعم')}</p>${state.settings.opening_hours?`<p class="text-xs text-stone-600 mt-1">ساعات العمل: ${escapeHTML(state.settings.opening_hours)}</p>`:''}</div></div><div class="text-xs font-bold sm:text-left"><p>رسوم التوصيل: <b>${money(state.settings.delivery_fee)}</b></p><p class="mt-1">الحد الأدنى: <b>${money(state.settings.minimum_order||0)}</b> · وقت تقديري: <b>${Number(state.settings.estimated_delivery_minutes||45)} دقيقة</b></p></div></div><div class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8"><div><p class="text-brand font-black text-xs tracking-[.2em] mb-2">اختار مزاجك</p><h2 class="text-3xl sm:text-5xl font-black">المنيو <span class="text-stone-300">بتاعنا</span></h2><p class="text-stone-500 mt-3 font-semibold">كل اللي بتحبه، في مكان واحد.</p></div><label class="relative w-full lg:max-w-sm"><span class="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400">${icon('search','w-5 h-5')}</span><input value="${escapeHTML(state.search)}" oninput="Hopa.search(this.value)" placeholder="بتدور على إيه؟" class="w-full bg-stone-50 border border-stone-200 rounded-2xl py-4 pr-12 pl-4 font-bold"></label></div>
+        ${!state.search?`<div class="flex gap-2.5 overflow-x-auto hide-scrollbar py-3 mb-7">${state.categories.map(c=>`<button onclick="Hopa.category('${escapeHTML(c.id)}')" class="shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl border font-extrabold text-sm transition ${state.category===c.id?'bg-ink border-ink text-white shadow-lg':'bg-white border-stone-200 text-stone-500 hover:border-stone-400'}">${icon(categoryIcon(c),'w-4 h-4')} ${escapeHTML(c.name)}</button>`).join('')}</div>`:''}
+        ${state.loading?`<div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">${Array.from({length:8},()=>'<div class="skeleton h-64 sm:h-80 rounded-2xl sm:rounded-3xl"></div>').join('')}</div>`:filtered.length?`<div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">${filtered.map((p,i)=>{const sizes=productSizes(p);const start=sizes.reduce((min,s)=>Math.min(min,Number(s.price)),Infinity);return `<article onclick="Hopa.openProduct('${escapeHTML(p.id)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')Hopa.openProduct('${escapeHTML(p.id)}')" class="food-card p-2 sm:p-3.5 cursor-pointer flex flex-col fade-up" style="animation-delay:${Math.min(i*35,250)}ms"><div class="aspect-square sm:aspect-[4/3] rounded-2xl sm:rounded-[20px] overflow-hidden bg-cream relative"><img loading="lazy" src="${PRODUCT_LOGO_URL}" onerror="this.onerror=null;this.src='${PRODUCT_LOGO_FALLBACK}'" alt="شعار هوبا بيتزا - ${escapeHTML(p.name)}" class="w-full h-full object-contain p-3 sm:p-5 bg-cream transition-transform duration-700 hover:scale-105"><span class="absolute top-2 right-2 sm:top-3 sm:right-3 bg-white/95 backdrop-blur rounded-full px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] font-black text-stone-600 max-w-[75%] truncate">${escapeHTML(state.categories.find(c=>c.id===p.category_id)?.name||'هوبا')}</span></div><div class="p-1.5 sm:p-2 pt-3 sm:pt-4 flex-1 flex flex-col"><h3 class="font-black text-sm sm:text-lg mb-1 leading-6">${escapeHTML(p.name)}</h3><p class="text-stone-500 text-[11px] sm:text-xs leading-5 sm:leading-6 font-semibold line-clamp-2 min-h-10 sm:min-h-12">${escapeHTML(p.description)}</p><div class="mt-auto pt-3 sm:pt-4 flex items-end justify-between gap-2 border-t border-stone-100"><div class="min-w-0"><span class="block text-[9px] sm:text-[10px] text-stone-400 font-extrabold mb-1">يبدأ من</span><strong class="text-base sm:text-xl font-black whitespace-nowrap">${Number.isFinite(start)?money(start):'حسب الاختيار'}</strong></div><span class="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-ink text-white flex items-center justify-center group-hover:bg-brand">${icon('plus','w-4 h-4 sm:w-5 sm:h-5')}</span></div></div></article>`}).join('')}</div>`:`<div class="rounded-3xl border border-dashed border-stone-300 bg-stone-50 py-16 text-center"><div class="mx-auto w-16 h-16 rounded-2xl bg-white flex items-center justify-center text-stone-300 mb-4">${icon('utensils','w-8 h-8')}</div><h3 class="text-xl font-black">${state.products.length?'ملقيناش الصنف ده':'المنيو لسه مش متحمّل'}</h3><p class="text-sm text-stone-500 mt-2 font-semibold">${state.products.length?'جرّب كلمة بحث تانية أو اختار قسم مختلف.':'راجع إعداد قاعدة البيانات وتشغيل ملف seed.sql.'}</p><button onclick="Hopa.refresh()" class="mt-5 px-5 py-3 bg-ink text-white rounded-xl font-bold">إعادة المحاولة</button></div>`}</div></section>
+      <footer class="bg-ink text-white px-4 sm:px-6 pt-12 pb-28 md:pb-12"><div class="max-w-7xl mx-auto"><div class="flex flex-col md:flex-row items-center md:items-start justify-between gap-8"><div class="text-center md:text-right"><div class="flex items-center gap-3 justify-center md:justify-start mb-4"><span class="w-12 h-12 bg-brand rounded-2xl flex items-center justify-center text-2xl font-black">H</span><b class="text-2xl font-black">هوبا بيتزا</b></div><p class="text-stone-400 text-sm font-semibold max-w-sm leading-7">الأصل في المذاق — بنقدملك وجبتك المفضلة بطعم مختلف.</p></div><div class="text-center md:text-right"><h3 class="font-black mb-4">تواصل معانا</h3><p class="text-stone-400 text-sm mb-3">${escapeHTML(CONFIG.address)}</p><div class="flex flex-wrap justify-center gap-3"><a class="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex gap-2 items-center font-bold text-sm" href="tel:${CONFIG.phone1}">${icon('phone','w-4 h-4 text-emerald-400')} <span dir="ltr">${CONFIG.phone1}</span></a><a class="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex gap-2 items-center font-bold text-sm" href="tel:${CONFIG.phone2}">${icon('phone','w-4 h-4 text-brand')} <span dir="ltr">${CONFIG.phone2}</span></a></div></div></div><div class="border-t border-white/10 mt-10 pt-6 text-center text-xs text-stone-500 font-bold">© ${new Date().getFullYear()} هوبا بيتزا — جميع الحقوق محفوظة</div></div></footer>
+      <div class="md:hidden fixed bottom-0 inset-x-0 z-30 p-3 safe-footer"><button onclick="Hopa.toggleCart()" class="w-full h-14 rounded-2xl bg-ink text-white shadow-2xl flex items-center justify-between px-5 font-black"><span class="flex items-center gap-3">${icon('shopping-bag','w-5 h-5')} عرض السلة <span class="bg-white/15 rounded-lg px-2 py-1 text-sm">${currentCount()} صنف</span></span><span>${state.cart.length?money(total()):'ابدأ طلبك'}</span></button></div>
+    </main>`;
+  }
+  function renderProductModal(){
+    const m=state.modal,p=m.product;const sizes=productSizes(p),addons=addonGroupFor(p);const chosen=currentUnitPrice()*m.qty;
+    return `<div class="fixed inset-0 z-[70] flex items-end md:items-center justify-center"><button aria-label="إغلاق" onclick="Hopa.closeProduct()" class="absolute inset-0 modal-backdrop"></button><section class="relative bg-white w-full max-w-4xl max-h-[94dvh] md:max-h-[86vh] rounded-t-[30px] md:rounded-[30px] overflow-hidden shadow-2xl flex flex-col md:flex-row"><button onclick="Hopa.closeProduct()" class="absolute top-3 left-3 z-10 w-10 h-10 rounded-full glass flex items-center justify-center">${icon('x','w-5 h-5')}</button><div class="h-48 sm:h-64 md:h-auto md:w-5/12 shrink-0 relative"><img src="${PRODUCT_LOGO_URL}" onerror="this.onerror=null;this.src='${PRODUCT_LOGO_FALLBACK}'" alt="شعار هوبا بيتزا - ${escapeHTML(p.name)}" class="w-full h-full object-contain p-6 bg-cream"><div class="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent md:hidden"></div><h2 class="absolute bottom-4 right-5 md:hidden text-white font-black text-2xl">${escapeHTML(p.name)}</h2></div><div class="flex-1 min-h-0 flex flex-col"><div class="p-5 sm:p-7 overflow-y-auto"><div class="hidden md:block mb-6"><h2 class="text-3xl font-black">${escapeHTML(p.name)}</h2><p class="text-stone-500 font-semibold mt-2">${escapeHTML(p.description)}</p></div>${sizes.length?`<div class="mb-7"><div class="flex justify-between items-center mb-3"><h3 class="font-black">اختار الحجم</h3><span class="text-[10px] bg-red-50 text-brand rounded-full px-2.5 py-1 font-black">مطلوب</span></div><div class="grid grid-cols-2 sm:grid-cols-3 gap-2">${sizes.map(s=>`<button onclick="Hopa.chooseSize('${escapeHTML(s.name)}')" class="p-3 rounded-2xl border-2 text-right ${m.size===s.name?'border-brand bg-red-50':'border-stone-100 hover:border-stone-300'}"><b class="block font-black ${m.size===s.name?'text-brand':'text-ink'}">${escapeHTML(s.name)}</b><span class="text-xs text-stone-500 font-bold">${money(s.price)}</span></button>`).join('')}</div></div>`:''}${addons.length?`<div class="mb-5"><div class="flex justify-between items-center mb-3"><h3 class="font-black">زوّدها على مزاجك</h3><span class="text-[10px] bg-stone-100 text-stone-500 rounded-full px-2.5 py-1 font-black">اختياري</span></div><div class="space-y-2">${addons.map(a=>{const checked=m.addonIds.includes(a.id);return `<label class="flex items-center justify-between gap-3 border rounded-2xl px-4 py-3 cursor-pointer ${checked?'border-ink bg-stone-50':'border-stone-100'}"><span class="flex items-center gap-3"><input type="checkbox" ${checked?'checked':''} onchange="Hopa.toggleAddon('${escapeHTML(a.id)}')" class="accent-red-600 w-4 h-4"><span class="font-bold text-sm">${escapeHTML(a.name)}</span></span><span class="text-sm font-black text-stone-500">+ ${money(priceForAddon(a,m.size))}</span></label>`}).join('')}</div></div>`:''}</div><div class="p-4 sm:p-5 border-t border-stone-100 bg-white flex gap-3 items-center"><div class="flex items-center gap-2 bg-stone-50 border border-stone-100 rounded-2xl p-1"><button onclick="Hopa.qtyModal(1)" class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">${icon('plus','w-4 h-4')}</button><b class="w-6 text-center">${m.qty}</b><button onclick="Hopa.qtyModal(-1)" class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">${icon('minus','w-4 h-4')}</button></div><button onclick="Hopa.addToCart()" class="btn-primary rounded-2xl px-4 sm:px-6 h-12 flex-1 flex items-center justify-between font-black"><span>أضف للسلة</span><span>${money(chosen)}</span></button></div></div></section></div>`;
+  }
+  function renderCartDrawer(){
+    return `<div class="fixed inset-0 z-[80]"><button class="absolute inset-0 bg-ink/55 backdrop-blur-sm" aria-label="إغلاق السلة" onclick="Hopa.toggleCart()"></button><aside class="drawer absolute top-0 bottom-0 right-0 w-full sm:max-w-[490px] bg-white shadow-2xl flex flex-col ${state.cartOpen?'translate-x-0':'translate-x-full'}"><div class="h-20 px-5 sm:px-6 border-b border-stone-100 flex items-center gap-3"><button onclick="Hopa.toggleCart()" class="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center">${icon('x')}</button><div><h2 class="font-black text-xl">${state.checkout?'بيانات التوصيل':'سلة المشتريات'}</h2><p class="text-xs text-stone-400 font-bold">${state.checkout?'اكتب بياناتك لتأكيد الطلب':'راجع طلبك قبل ما تكمل'}</p></div></div>
+      <div class="flex-1 overflow-y-auto bg-cream/70 p-4 sm:p-5">${!state.checkout?state.cart.length?`<div class="space-y-3">${state.cart.map(item=>`<article class="bg-white border border-stone-100 rounded-2xl p-3 flex gap-3"><img src="${PRODUCT_LOGO_URL}" onerror="this.onerror=null;this.src='${PRODUCT_LOGO_FALLBACK}'" alt="شعار هوبا بيتزا" class="w-24 h-24 rounded-xl object-contain p-2 bg-cream"><div class="min-w-0 flex-1"><div class="flex justify-between gap-2"><div><h3 class="font-black leading-6">${escapeHTML(item.name)}</h3><p class="text-xs text-stone-500 mt-1 font-bold">${escapeHTML(item.size)}</p></div><button onclick="Hopa.removeCart('${item.id}')" class="text-stone-300 hover:text-brand">${icon('trash-2','w-4 h-4')}</button></div>${item.addons.length?`<p class="text-[10px] text-stone-500 mt-1">${item.addons.map(a=>escapeHTML(a.name)).join('، ')}</p>`:''}<div class="flex justify-between items-center mt-2"><b>${money(item.itemTotal)}</b><div class="flex items-center gap-2 bg-stone-50 border border-stone-100 p-1 rounded-lg"><button onclick="Hopa.qtyCart('${item.id}',1)" class="w-6 h-6 bg-white rounded shadow-sm">+</button><span class="text-xs font-black w-4 text-center">${item.qty}</span><button onclick="Hopa.qtyCart('${item.id}',-1)" class="w-6 h-6 bg-white rounded shadow-sm">−</button></div></div></div></article>`).join('')}</div>`:`<div class="min-h-full flex flex-col items-center justify-center text-center py-16"><div class="w-20 h-20 bg-white shadow-sm rounded-3xl flex items-center justify-center text-stone-300 mb-4">${icon('shopping-bag','w-9 h-9')}</div><h3 class="text-xl font-black">السلة لسه فاضية</h3><p class="text-sm text-stone-500 mt-2">اختار حاجة حلوة من المنيو وارجعلنا.</p><button onclick="Hopa.toggleCart()" class="mt-5 btn-primary rounded-xl px-5 py-3 font-black">تصفح المنيو</button></div>`:`<form id="checkout-form" onsubmit="Hopa.submitOrder(event)" class="space-y-4"><div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 flex gap-3 text-emerald-800">${icon('shield-check','w-5 h-5 shrink-0')}<p class="text-xs font-bold leading-6">طلبك هيتسجل مباشرة في نظام إدارة المطعم، وتقدر تتابع حالته من نفس الموقع.</p></div><label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">الاسم بالكامل</span><input required minlength="2" maxlength="100" name="name" autocomplete="name" class="w-full mt-1 font-bold outline-none" placeholder="اكتب اسمك"></label><label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">رقم الهاتف</span><input required type="tel" inputmode="tel" maxlength="25" name="phone" dir="ltr" class="w-full mt-1 font-bold text-left outline-none" placeholder="01xxxxxxxxx"></label><label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">عنوان التوصيل بالتفصيل</span><textarea required minlength="5" maxlength="500" name="address" rows="2" class="w-full mt-1 font-bold outline-none resize-none" placeholder="المنطقة، الشارع، علامة مميزة..."></textarea></label><label class="block bg-white border border-stone-200 rounded-2xl p-3"><span class="text-[10px] text-stone-400 font-black">ملاحظات (اختياري)</span><input maxlength="500" name="notes" class="w-full mt-1 font-bold outline-none" placeholder="من غير بصل، تسوية زيادة..."></label><div id="turnstile-widget" class="flex justify-center"></div><p id="turnstile-error" class="text-xs text-red-600" role="status"></p><button type="button" onclick="Hopa.setCheckout(false)" class="text-stone-500 font-bold text-sm">${icon('arrow-right','w-4 h-4 inline-block align-middle')} الرجوع للسلة</button></form>`}</div>
+      ${state.cart.length?`<div class="border-t border-stone-100 p-5 bg-white safe-footer"><div class="space-y-2 mb-4"><div class="flex justify-between text-sm font-bold text-stone-500"><span>قيمة المنتجات</span><span class="text-ink">${money(subtotal())}</span></div><div class="flex justify-between text-sm font-bold text-stone-500"><span>التوصيل</span><span class="text-ink">${money(state.settings.delivery_fee)}</span></div><div class="h-px bg-stone-100 my-3"></div><div class="flex justify-between items-center"><b class="font-black text-lg">الإجمالي</b><strong class="font-black text-2xl text-brand">${money(total())}</strong></div></div>${state.checkout?`<button form="checkout-form" type="submit" class="btn-primary w-full rounded-2xl py-4 font-black flex items-center justify-center gap-3 ${state.loading?'opacity-60':''}" ${state.loading||!state.settings.is_open?'disabled':''}>${icon('send','w-5 h-5')}${!state.settings.is_open?'المطعم مغلق الآن':state.loading?'جارٍ تسجيل الطلب...':'تأكيد الطلب'}</button>`:`<button onclick="Hopa.setCheckout(true)" ${!state.settings.is_open?'disabled':''} class="w-full rounded-2xl bg-ink text-white py-4 font-black flex items-center justify-center gap-3 ${!state.settings.is_open?'opacity-60':''}">${!state.settings.is_open?'المطعم مغلق حاليًا':'متابعة الطلب'} ${icon('arrow-left','w-5 h-5')}</button>`}</div>`:''}
+    </aside></div>`;
+  }
+  const Hopa={
+    openTrackOrder(){state.trackOrderOpen=true;state.cartOpen=false;state.checkout=false;state.modal=null;render();document.body.style.overflow='hidden'},
+    closeTrackOrder(){state.trackOrderOpen=false;render();document.body.style.overflow=state.orderSuccess?'hidden':''},
+    async trackSavedOrder(orderNumber, trackingToken){try{const data=await publicApi('track',{order_number:orderNumber,tracking_token:trackingToken});state.trackOrderOpen=false;state.orderSuccess=data;state.editingOrderDetails=false;saveTrackedOrder(data);render();document.body.style.overflow='hidden'}catch(e){toast(e.message||'تعذر فتح الطلب','error')}},
+    async copyTrackingLink(){const order=state.orderSuccess;if(!order?.tracking_token)return;const link=trackingLink(order);try{await navigator.clipboard.writeText(link);toast('تم نسخ رابط التتبع الآمن')}catch(_){window.prompt('انسخ رابط التتبع السري واحتفظ به:',link)}},
+    async trackOrder(event){
+      event.preventDefault();
+      const form=event.currentTarget,fd=new FormData(form);
+      const orderNumber=String(fd.get('order_number')||'').trim().toUpperCase().replace(/\s+/g,'');
+      const trackingToken=String(fd.get('tracking_token')||'').trim().toLowerCase();
+      const errorBox=$('#track-order-error');
+      const button=$('#track-order-submit');
+      if(!/^HOPA-[0-9]{1,18}$/.test(orderNumber)||! /^[a-f0-9]{64}$/.test(trackingToken)){if(errorBox){errorBox.textContent='راجع رقم الطلب ورمز التتبع السري.';errorBox.classList.remove('hidden')}return}
+      if(button){button.disabled=true;button.textContent='جارٍ البحث عن الطلب...'}
+      if(errorBox){errorBox.textContent='';errorBox.classList.add('hidden')}
+      try{
+        const data=await publicApi('track',{order_number:orderNumber,tracking_token:trackingToken});
+        state.trackOrderOpen=false;state.editingOrderDetails=false;
+        state.orderSuccess=data;saveTrackedOrder(data);
+        render();document.body.style.overflow='hidden';
+      }catch(error){
+        console.error('[Hopa track order]',{message:error?.message,code:error?.code,details:error?.details,hint:error?.hint});
+        if(errorBox){errorBox.textContent=error?.message||'حصل خطأ أثناء البحث. حاول تاني.';errorBox.classList.remove('hidden')}
+      }finally{
+        const currentButton=$('#track-order-submit');
+        if(currentButton){currentButton.disabled=false;currentButton.innerHTML=`${icon('search-check','w-5 h-5')} عرض حالة الطلب`;icons()}
+      }
+    },
+    toggleEditOrderDetails(value){state.editingOrderDetails=typeof value==='boolean'?value:!state.editingOrderDetails;render();document.body.style.overflow='hidden'},
+    async saveOrderDetails(event){
+      event.preventDefault();
+      const order=state.orderSuccess;if(!order)return;
+      const form=event.currentTarget,fd=new FormData(form);
+      const customerName=String(fd.get('customer_name')||'').trim();
+      const newPhone=String(fd.get('new_phone')||'').trim();
+      const address=String(fd.get('address')||'').trim();
+      const notes=String(fd.get('notes')||'').trim();
+      const digits=normalizePhone(newPhone);
+      const errorBox=$('#edit-order-error');
+      if(customerName.length<2||digits.length<10||digits.length>15||address.length<5){if(errorBox){errorBox.textContent='راجع الاسم ورقم الهاتف والعنوان.';errorBox.classList.remove('hidden')}return}
+      const updatedItems=(Array.isArray(order.items)?order.items:[]).map((item,i)=>{
+        const product=productById(item.product_id);
+        const size=product?String(fd.get(`size_${i}`)??item.size??''):String(item.size||'');
+        const priorAddons=Array.isArray(item.addons)?item.addons.map(a=>typeof a==='string'?a:a?.id).filter(Boolean):[];
+        const addonIds=product?fd.getAll(`addon_${i}`).map(String).filter(id=>addonGroupFor(product).some(a=>a.id===id)):priorAddons;
+        return {product_id:item.product_id,size,quantity:Number(fd.get(`qty_${i}`)??item.quantity??1),addon_ids:addonIds};
+      }).filter(item=>item.quantity>0);
+      if(!updatedItems.length){if(errorBox){errorBox.textContent='لازم تسيب صنف واحد على الأقل في الطلب.';errorBox.classList.remove('hidden')}return}
+      if(updatedItems.some(item=>!Number.isInteger(item.quantity)||item.quantity>50)||updatedItems.length>30){if(errorBox){errorBox.textContent='راجع كميات الأصناف؛ الكمية من 1 إلى 50 وبحد أقصى 30 صنفًا.';errorBox.classList.remove('hidden')}return}
+      const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.textContent='جارٍ حفظ التعديلات...'}
+      try{
+        const data=await publicApi('update',{order_number:order.order_number,tracking_token:order.tracking_token,p_customer_name:customerName,p_new_phone:normalizePhone(newPhone),p_address:address,p_notes:notes,p_items:updatedItems});
+        if(!data)throw new Error('تعذر تعديل الطلب. تأكد من رقم الطلب والهاتف وأن الطلب لم يبدأ تجهيزه.');
+        state.orderSuccess={...data,phone:data.phone||newPhone};state.editingOrderDetails=false;render();document.body.style.overflow='hidden';toast('تم حفظ تعديلات الطلب بنجاح');
+      }catch(error){
+        console.error('[Hopa edit order]',{message:error?.message,code:error?.code,details:error?.details,hint:error?.hint});
+        const box=$('#edit-order-error');if(box){box.textContent=error?.message||'تعذر حفظ التعديلات. حاول تاني.';box.classList.remove('hidden')}
+        const current=$('#edit-order-details-form')?.querySelector('button[type="submit"]');if(current){current.disabled=false;current.textContent='حفظ التعديلات'}
+      }
+    },
+    async cancelTrackedOrder(){
+      const order=state.orderSuccess;if(!order)return;
+      if(order.status!=='استلمنا طلبك'){toast('الإلغاء متاح قبل بدء التجهيز فقط.','error');return}
+      if(!window.confirm(`متأكد إنك عايز تلغي الطلب ${order.order_number}؟`))return;
+      try{
+        const data=await publicApi('cancel',{order_number:order.order_number,tracking_token:order.tracking_token});
+        if(!data)throw new Error('تعذر إلغاء الطلب. راجع البيانات وحاول تاني.');
+        state.orderSuccess={...order,...data,status:'ملغي',updated_at:data.updated_at||new Date().toISOString()};state.editingOrderDetails=false;render();document.body.style.overflow='hidden';toast('تم إلغاء الطلب');
+      }catch(error){console.error('[Hopa cancel order]',error);toast(error?.message||'تعذر إلغاء الطلب','error')}
+    },
+    async refresh(){state.loading=true;render();try{await loadCatalog();state.loading=false;render();toast('تم تحديث المنيو')}catch(e){state.loading=false;render();toast('تعذر تحميل المنيو: '+(e.message||'تحقق من إعدادات Supabase'),'error')}},
+    search(value){state.search=value;const cursor=$('input[placeholder="بتدور على إيه؟"]')?.selectionStart;render();const input=$('input[placeholder="بتدور على إيه؟"]');if(input){input.focus();try{input.setSelectionRange(cursor,cursor)}catch(_){}}},
+    category(id){state.category=id;state.search='';render()},
+    openProduct(id){const p=productById(id);if(!p)return;const s=productSizes(p);state.modal={product:p,size:s[0]?.name||'',qty:1,addonIds:[]};render();document.body.style.overflow='hidden'},
+    closeProduct(){state.modal=null;render();document.body.style.overflow=state.cartOpen?'hidden':''},
+    chooseSize(size){if(!state.modal)return;state.modal.size=size;render()},
+    toggleAddon(id){if(!state.modal)return;const idx=state.modal.addonIds.indexOf(id);idx>=0?state.modal.addonIds.splice(idx,1):state.modal.addonIds.push(id);render()},
+    qtyModal(delta){if(!state.modal)return;state.modal.qty=Math.max(1,Math.min(50,state.modal.qty+delta));render()},
+    addToCart(){if(!state.modal)return;const m=state.modal,p=m.product;if(productSizes(p).length&&!m.size){toast('اختار الحجم الأول','error');return}const selected=addonGroupFor(p).filter(a=>m.addonIds.includes(a.id)).map(a=>({id:a.id,name:a.name,price:priceForAddon(a,m.size)}));const unit=Number(productSizes(p).find(s=>s.name===m.size)?.price||0)+selected.reduce((s,a)=>s+a.price,0);state.cart.push({id:crypto.randomUUID?crypto.randomUUID():randomHex(8),productId:p.id,name:p.name,img:PRODUCT_LOGO_URL,size:m.size,qty:m.qty,addonIds:m.addonIds.slice(),addons:selected,unitPrice:unit,itemTotal:unit*m.qty});persistCart();state.modal=null;document.body.style.overflow=state.cartOpen?'hidden':'';render();toast('اتضاف للسلة بنجاح')},
+    toggleCart(){state.cartOpen=!state.cartOpen;if(!state.cartOpen)state.checkout=false;render();document.body.style.overflow=state.cartOpen?'hidden':''},
+    setCheckout(value){state.checkout=Boolean(value);render()},
+    removeCart(id){state.cart=state.cart.filter(c=>c.id!==id);persistCart();if(!state.cart.length)state.checkout=false;render()},
+    qtyCart(id,delta){const item=state.cart.find(c=>c.id===id);if(!item)return;item.qty=Math.max(1,Math.min(50,item.qty+delta));item.itemTotal=item.unitPrice*item.qty;persistCart();render()},
+    async submitOrder(event){
+      event.preventDefault();
+      if(state.loading||!state.cart.length)return;
+      const form=event.currentTarget,fd=new FormData(form);
+      const customer={name:String(fd.get('name')||'').trim(),phone:normalizePhone(String(fd.get('phone')||'')),address:String(fd.get('address')||'').trim(),notes:String(fd.get('notes')||'').trim()};
+      const digits=customer.phone;
+      if(!state.settings.is_open){toast('المطعم مغلق حاليًا ولا يستقبل طلبات جديدة.','error');return}
+      if(state.cart.reduce((sum,item)=>sum+Number(item.itemTotal||0),0)<Number(state.settings.minimum_order||0)){toast(`الحد الأدنى للطلب ${money(state.settings.minimum_order)} قبل رسوم التوصيل.`,'error');return}
+      if(customer.name.length<2||digits.length<10||digits.length>15||customer.address.length<5){toast('راجع الاسم ورقم الهاتف والعنوان','error');return}
+      if(turnstileIsConfigured()&&!state.captchaToken){toast('أكمل التحقق البشري قبل تأكيد الطلب.','error');return}
+      const captchaToken=state.captchaToken;
+      state.loading=true;render();
+      try{
+        const items=state.cart.map(item=>({product_id:item.productId,size:item.size,quantity:item.qty,addon_ids:item.addonIds}));
+        const signature=await sha256Hex(JSON.stringify({customer,items}));
+        let attempt=null;
+        try{const prior=JSON.parse(localStorage.getItem('hopa_pending_attempt_v1')||'null');if(prior?.signature===signature&&/^[a-f0-9]{64}$/.test(prior.tracking_token||'')&&/^[a-f0-9]{64}$/.test(prior.idempotency_key||''))attempt=prior}catch(_){}
+        if(!attempt){attempt={signature,tracking_token:randomHex(32),idempotency_key:randomHex(32)};try{localStorage.setItem('hopa_pending_attempt_v1',JSON.stringify(attempt))}catch(_){}}
+        const data=await publicApi('create',{p_customer_name:customer.name,p_phone:customer.phone,p_address:customer.address,p_notes:customer.notes,p_items:items,tracking_token:attempt.tracking_token,idempotency_key:attempt.idempotency_key,captcha_token:captchaToken});
+        if(!data?.order_number||!data?.tracking_token)throw new Error('لم نستلم تأكيد الطلب ورمز التتبع الآمن من قاعدة البيانات.');
+        state.cart=[];persistCart();state.captchaToken='';try{localStorage.removeItem('hopa_pending_attempt_v1')}catch(_){}
+        state.checkout=false;state.cartOpen=false;state.loading=false;
+        const fullOrder={...data,phone:data.phone||customer.phone,customer_name:data.customer_name||customer.name,address:data.address||customer.address,notes:data.notes??customer.notes,status:data.status||'استلمنا طلبك',updated_at:data.updated_at||new Date().toISOString()};
+        state.orderSuccess=fullOrder;saveTrackedOrder(fullOrder);state.editingOrderDetails=false;
+        render();document.body.style.overflow='hidden';toast(`تم تسجيل الطلب ${data.order_number} وإرساله للإدارة`);
+      }catch(error){
+        state.loading=false;render();console.error('[Hopa order]',{message:error?.message,code:error?.code,details:error?.details,hint:error?.hint,error});toast(error?.message||'حصل خطأ أثناء تسجيل الطلب. افتح Console لمعرفة التفاصيل.','error');
+      }
+    },
+    async refreshOrderStatus(){
+      if(!state.orderSuccess)return;
+      let data;try{data=await publicApi('track',{order_number:state.orderSuccess.order_number,tracking_token:state.orderSuccess.tracking_token})}catch(error){const el=$('#order-status-error');if(el){el.textContent=error?.message||'مش قادرين نجيب تفاصيل الطلب دلوقتي. حاول تاني.';el.classList.remove('hidden')}return}
+      state.orderSuccess={...state.orderSuccess,...data};saveTrackedOrder(state.orderSuccess);
+      state.editingOrderDetails=false;render();document.body.style.overflow='hidden';toast('تم تحديث تفاصيل الطلب');
+    },
+    reorderPreviousOrder(){
+      const order=state.orderSuccess;if(!order||!Array.isArray(order.items))return;
+      const rebuilt=[];let skipped=0;
+      for(const row of order.items){
+        const product=productById(row.product_id);if(!product){skipped++;continue}
+        const size=productSizes(product).find(z=>z.name===String(row.size||''));if(!size){skipped++;continue}
+        const oldIds=(Array.isArray(row.addons)?row.addons:[]).map(a=>typeof a==='string'?a:a?.id).filter(Boolean);
+        const chosen=addonGroupFor(product).filter(a=>oldIds.includes(a.id)).map(a=>({id:a.id,name:a.name,price:priceForAddon(a,size.name)}));
+        const qty=Math.max(1,Math.min(50,Math.trunc(Number(row.quantity)||1)));
+        const unitPrice=Number(size.price)+chosen.reduce((n,a)=>n+a.price,0);
+        rebuilt.push({id:randomHex(16),productId:product.id,name:product.name,img:PRODUCT_LOGO_URL,size:size.name,qty,addonIds:chosen.map(a=>a.id),addons:chosen,unitPrice,itemTotal:unitPrice*qty});
+      }
+      if(!rebuilt.length){toast('الأصناف القديمة لم تعد متاحة بالمنيو الحالية.','error');return}
+      state.cart=rebuilt.slice(0,30);persistCart();state.orderSuccess=null;state.editingOrderDetails=false;state.cartOpen=true;state.checkout=false;render();document.body.style.overflow='hidden';toast(skipped?`تم تجهيز إعادة الطلب مع تخطي ${skipped} صنف غير متاح`:'تم تجهيز نفس الطلب بالأسعار الحالية');
+    },
+    closeOrderSuccess(){state.orderSuccess=null;state.editingOrderDetails=false;document.body.style.overflow=state.trackOrderOpen?'hidden':'';render()}
+
+  };
+  window.Hopa=Hopa;
+  async function start(){try{state.loading=true;if(!client)throw new Error('تعذر تحميل مكتبة الاتصال بـ Supabase. تأكد من الإنترنت ثم حدّث الصفحة.');await loadCatalog();restoreCart();state.loading=false;render();if(location.hash.startsWith('#track=')){const params=new URLSearchParams(location.hash.slice(1));const number=params.get('track')||'';const token=params.get('token')||'';if(number&&token){try{const order=await publicApi('track',{order_number:number,tracking_token:token});state.orderSuccess=order;state.trackOrderOpen=false;saveTrackedOrder(order);render();document.body.style.overflow='hidden'}catch(e){toast('رابط التتبع غير صالح أو انتهت صلاحية الطلب.','error')}}}}catch(error){state.loading=false;state.categories=[];state.products=[];state.addons=[];render();console.error('[Hopa catalog]',error);toast('تعذر الاتصال بقاعدة البيانات. تأكد من تنفيذ ملفات SQL حسب تعليمات README-AR.md.', 'error')}finally{const loader=$('#loader');loader.style.opacity='0';setTimeout(()=>loader.remove(),350)}}
+  document.addEventListener('DOMContentLoaded',start);
+})();
+</script>
+</body>
+</html>
